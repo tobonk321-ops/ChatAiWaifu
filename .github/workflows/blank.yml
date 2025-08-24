@@ -1,36 +1,177 @@
-# This is a basic workflow to help you get started with Actions
+name: Build TobyWaifu (Phone-only)
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+permissions:
+  contents: read
+
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      # Projekt-Dateien on-the-fly erzeugen (Starter-Build)
+      - name: Create project files
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          set -e
+          mkdir -p TobyWaifu/app/src/main/java/com/tobywaifu/app/ui/theme
+          mkdir -p TobyWaifu/app/src/main/res/values
+          mkdir -p TobyWaifu/app/src/main
+
+          cat > TobyWaifu/settings.gradle.kts <<'EOF'
+          pluginManagement {
+            repositories { google(); mavenCentral(); gradlePluginPortal() }
+            plugins {
+              id("com.android.application") version "8.5.2"
+              id("org.jetbrains.kotlin.android") version "1.9.24"
+            }
+          }
+          rootProject.name = "TobyWaifu"
+          include(":app")
+          EOF
+
+          cat > TobyWaifu/build.gradle.kts <<'EOF'
+          plugins {}
+          allprojects { repositories { google(); mavenCentral() } }
+          EOF
+
+          cat > TobyWaifu/app/build.gradle.kts <<'EOF'
+          plugins {
+            id("com.android.application")
+            id("org.jetbrains.kotlin.android")
+          }
+          android {
+            namespace = "com.tobywaifu.app"
+            compileSdk = 34
+            defaultConfig {
+              applicationId = "com.tobywaifu.app"
+              minSdk = 26
+              targetSdk = 34
+              versionCode = 1
+              versionName = "0.1.0"
+              vectorDrawables.useSupportLibrary = true
+            }
+            buildTypes {
+              release {
+                isMinifyEnabled = true
+                proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+              }
+              debug { isMinifyEnabled = false }
+            }
+            compileOptions {
+              sourceCompatibility = JavaVersion.VERSION_17
+              targetCompatibility = JavaVersion.VERSION_17
+            }
+            kotlinOptions { jvmTarget = "17" }
+            buildFeatures { compose = true }
+            composeOptions { kotlinCompilerExtensionVersion = "1.5.14" }
+            packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
+          }
+          dependencies {
+            val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
+            implementation(composeBom); androidTestImplementation(composeBom)
+            implementation("androidx.core:core-ktx:1.13.1")
+            implementation("androidx.activity:activity-compose:1.9.1")
+            implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
+            implementation("androidx.compose.ui:ui")
+            implementation("androidx.compose.ui:ui-tooling-preview")
+            implementation("androidx.compose.material3:material3:1.2.1")
+            debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          EOF
+
+          echo "# leer" > TobyWaifu/app/proguard-rules.pro
+
+          cat > TobyWaifu/app/src/main/AndroidManifest.xml <<'EOF'
+          <!-- Manifest-Inhalte hier ergänzen -->
+          EOF
+
+          cat > TobyWaifu/app/src/main/java/com/tobywaifu/app/MainActivity.kt <<'EOF'
+          package com.tobywaifu.app
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.unit.dp
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          class MainActivity : ComponentActivity() {
+            override fun onCreate(savedInstanceState: Bundle?) {
+              super.onCreate(savedInstanceState)
+              setContent {
+                val bg = Color(0xFF0B0E11); val surface = Color(0xFF12161C)
+                val primary = Color(0xFF1F3A5F); val on = Color(0xFFE8F0FF)
+                val colors = darkColorScheme(
+                  primary = primary, onPrimary = on,
+                  background = bg, onBackground = on,
+                  surface = surface, onSurface = on
+                )
+                MaterialTheme(colorScheme = colors) {
+                  Surface(Modifier.fillMaxSize(), color = colors.background) {
+                    Column(
+                      Modifier.fillMaxSize().padding(16.dp),
+                      verticalArrangement = Arrangement.Center,
+                      horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                      Text("TobyWaifu • Starter-Build", style = MaterialTheme.typography.headlineSmall)
+                      Spacer(Modifier.height(8.dp))
+                      Text("Dark-Blue Theme. Nächster Schritt: echte Screens/Chat.")
+                      Spacer(Modifier.height(16.dp))
+                      Button(onClick = {}) { Text("OK") }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          EOF
+
+          mkdir -p TobyWaifu/app/src/main/res/values
+          cat > TobyWaifu/app/src/main/res/values/strings.xml <<'EOF'
+          <resources>
+            <string name="app_name">TobyWaifu</string>
+          </resources>
+          EOF
+
+      # Android SDK: nur cmdline-tools via Action
+      - name: Setup Android SDK (nur cmdline-tools)
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12266719
+
+      # Lizenzen & Pakete non-interactive installieren
+      - name: Install SDK packages + accept licenses
+        run: |
+          set -e
+          export ANDROID_SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          SDKM="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKM" --licenses >/dev/null
+          "$SDKM" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          "$SDKM" --list_installed || true
+
+      - name: Build debug APK
+        uses: gradle/gradle-build-action@v3
+        with:
+          gradle-version: 8.7
+          build-root-directory: TobyWaifu
+          arguments: |
+            --no-daemon
+            --stacktrace
+            --warning-mode=all
+            -i
+            assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TobyWaifu-debug-apk
+          path: TobyWaifu/app/build/outputs/apk/debug/*.apk
